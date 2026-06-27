@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard,
@@ -19,19 +20,27 @@ const NAV = [
   { href: '/outlet',   label: 'Outlet',    icon: Store },
   { href: '/brand',    label: 'Brand',     icon: Tag },
   { href: '/upload',   label: 'Upload',    icon: Upload },
-  { href: '/members',  label: 'Members',   icon: Users },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setIsAdmin(user?.app_metadata?.role === 'admin')
+    })
+  }, [])
 
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
   }
+
+  const nav = isAdmin ? [...NAV, { href: '/members', label: 'Members', icon: Users }] : NAV
 
   return (
     <aside className="flex flex-col w-60 bg-slate-900 min-h-screen">
@@ -48,7 +57,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {nav.map(({ href, label, icon: Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
           return (
             <Link

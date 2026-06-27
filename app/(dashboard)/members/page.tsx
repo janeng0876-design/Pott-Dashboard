@@ -1,12 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Users, Trash2, Copy, Check, Plus, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { Users, Trash2, Copy, Check, Plus, X, ShieldCheck, User } from 'lucide-react'
 
 interface Member {
   id: string
   email: string
   name: string
+  role: 'admin' | 'member'
   created_at: string
 }
 
@@ -17,6 +20,13 @@ interface NewCredential {
 }
 
 export default function MembersPage() {
+  const supabase = createClient()
+  const router = useRouter()
+
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
+
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -27,8 +37,23 @@ export default function MembersPage() {
   const [credential, setCredential] = useState<NewCredential | null>(null)
   const [copied, setCopied] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
-  useEffect(() => { fetchMembers() }, [])
+  useEffect(() => {
+    checkAdmin()
+  }, [])
+
+  async function checkAdmin() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || user.app_metadata?.role !== 'admin') {
+      router.replace('/')
+      return
+    }
+    setCurrentUserId(user.id)
+    setIsAdmin(true)
+    setAuthLoading(false)
+    fetchMembers()
+  }
 
   async function fetchMembers() {
     setLoading(true)
@@ -64,7 +89,23 @@ export default function MembersPage() {
     fetchMembers()
   }
 
+  async function handleRoleToggle(member: Member) {
+    if (member.id === currentUserId) return
+    const newRole = member.role === 'admin' ? 'member' : 'admin'
+    setTogglingId(member.id)
+
+    await fetch('/api/members', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: member.id, role: newRole }),
+    })
+
+    setTogglingId(null)
+    fetchMembers()
+  }
+
   async function handleDelete(id: string) {
+    if (id === currentUserId) return
     if (!confirm('Remove this member? They will no longer be able to log in.')) return
     setDeletingId(id)
     await fetch('/api/members', {
@@ -84,6 +125,16 @@ export default function MembersPage() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!isAdmin) return null
 
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
@@ -206,17 +257,48 @@ export default function MembersPage() {
                     </span>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{m.name || '—'}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900">{m.name || '—'}</p>
+                      {m.id === currentUserId && (
+                        <span className="text-xs text-gray-400">(you)</span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-400">{m.email}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDelete(m.id)}
-                  disabled={deletingId === m.id}
-                  className="p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-40"
-                >
-                  <Trash2 size={14} />
-                </button>
+
+                <div className="flex items-center gap-3">
+                  {/* Role badge / toggle */}
+                  <button
+                    onClick={() => handleRoleToggle(m)}
+                    disabled={togglingId === m.id || m.id === currentUserId}
+                    title={m.id === currentUserId ? 'Cannot change your own role' : `Switch to ${m.role === 'admin' ? 'member' : 'admin'}`}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      m.role === 'admin'
+                        ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {togglingId === m.id ? (
+                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                    ) : m.role === 'admin' ? (
+                      <ShieldCheck size={12} />
+                    ) : (
+                      <User size={12} />
+                    )}
+                    {m.role === 'admin' ? 'Admin' : 'Member'}
+                  </button>
+
+                  {/* Delete */}
+                  <button
+                    onClick={() => handleDelete(m.id)}
+                    disabled={deletingId === m.id || m.id === currentUserId}
+                    title={m.id === currentUserId ? 'Cannot remove yourself' : 'Remove member'}
+                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
