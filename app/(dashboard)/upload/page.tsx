@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { parseExcelFile } from '@/lib/excel-parser'
 import { Upload as UploadType } from '@/types'
@@ -8,8 +9,10 @@ import { UploadCloud, Trash2, FileSpreadsheet, CheckCircle2, AlertCircle } from 
 
 export default function UploadPage() {
   const supabase = createClient()
+  const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const [authChecked, setAuthChecked] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,7 +25,16 @@ export default function UploadPage() {
   const [historyLoading, setHistoryLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  useEffect(() => { fetchHistory() }, [])
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.app_metadata?.role !== 'admin') {
+        router.replace('/')
+      } else {
+        setAuthChecked(true)
+        fetchHistory()
+      }
+    })
+  }, [])
 
   async function fetchHistory() {
     setHistoryLoading(true)
@@ -88,6 +100,12 @@ export default function UploadPage() {
     }
     setUploading(false)
   }
+
+  if (!authChecked) return (
+    <div className="flex items-center justify-center h-full">
+      <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 
   const previewCols = preview[0] ? Object.keys(preview[0]).slice(0, 7) : []
 

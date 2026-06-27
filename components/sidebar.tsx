@@ -40,7 +40,9 @@ export default function Sidebar() {
     router.refresh()
   }
 
-  const nav = isAdmin ? [...NAV, { href: '/members', label: 'Members', icon: Users }] : NAV
+  const nav = isAdmin
+    ? [...NAV, { href: '/members', label: 'Members', icon: Users }]
+    : NAV.filter((item) => item.href !== '/upload')
 
   return (
     <aside className="flex flex-col w-60 bg-slate-900 min-h-screen">
