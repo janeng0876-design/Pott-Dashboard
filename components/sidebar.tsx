@@ -9,6 +9,7 @@ import {
   Store,
   Tag,
   Upload,
+  Users,
   LogOut,
 } from 'lucide-react'
 
@@ -18,6 +19,7 @@ const NAV = [
   { href: '/outlet',   label: 'Outlet',    icon: Store },
   { href: '/brand',    label: 'Brand',     icon: Tag },
   { href: '/upload',   label: 'Upload',    icon: Upload },
+  { href: '/members',  label: 'Members',   icon: Users },
 ]
 
 export default function Sidebar() {
