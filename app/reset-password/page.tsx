@@ -2,34 +2,52 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
 export default function ResetPasswordPage() {
   const supabase = createClient()
   const router = useRouter()
   const [ready, setReady] = useState(false)
+  const [expired, setExpired] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    // Exchange the code from the email link for a session
+    // Listen for the PASSWORD_RECOVERY event Supabase fires when the
+    // recovery link is opened — works regardless of PKCE or implicit flow
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setReady(true)
+      }
+    })
+
+    // Also handle PKCE code in URL query string
     const code = new URLSearchParams(window.location.search).get('code')
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (error) {
-          router.replace('/login')
-        } else {
-          setReady(true)
+        if (!error) setReady(true)
+        else setExpired(true)
+      })
+    }
+
+    // If no code and no event after 3s, the link is invalid/expired
+    const timeout = setTimeout(() => {
+      setExpired((prev) => {
+        if (!prev) {
+          supabase.auth.getUser().then(({ data: { user } }) => {
+            if (!user) setExpired(true)
+          })
         }
+        return prev
       })
-    } else {
-      // Already has a session (e.g. navigated here directly while logged in)
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) setReady(true)
-        else router.replace('/login')
-      })
+    }, 3000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timeout)
     }
   }, [])
 
@@ -69,7 +87,17 @@ export default function ResetPasswordPage() {
           <p className="text-slate-400 mt-1 text-sm">Set a new password</p>
         </div>
 
-        {!ready ? (
+        {expired ? (
+          <div className="bg-white rounded-2xl shadow-xl p-8 text-center space-y-4">
+            <p className="text-sm text-gray-600">This reset link has expired or is invalid.</p>
+            <Link
+              href="/forgot-password"
+              className="block w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors"
+            >
+              Request a new link
+            </Link>
+          </div>
+        ) : !ready ? (
           <div className="flex justify-center">
             <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
           </div>
