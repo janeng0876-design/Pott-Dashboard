@@ -12,6 +12,11 @@ export async function GET(request: Request) {
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`)
     }
+    // Server-side PKCE exchange failed (verifier only in client browser).
+    // Forward the code to the reset-password page for client-side retry.
+    if (next === '/reset-password') {
+      return NextResponse.redirect(`${origin}/reset-password?code=${encodeURIComponent(code)}`)
+    }
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)

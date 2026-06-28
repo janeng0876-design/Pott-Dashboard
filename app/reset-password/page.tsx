@@ -16,16 +16,26 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    // Listen for the PASSWORD_RECOVERY event Supabase fires when the
-    // recovery link is opened — works regardless of PKCE or implicit flow
+    const params = new URLSearchParams(window.location.search)
+
+    // Supabase appends ?error=... when the link is expired or invalid
+    if (params.get('error')) {
+      setExpired(true)
+      return
+    }
+
+    // Listen for PASSWORD_RECOVERY event (implicit / OTP flow)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setReady(true)
-      }
+      if (event === 'PASSWORD_RECOVERY') setReady(true)
     })
 
-    // Also handle PKCE code in URL query string
-    const code = new URLSearchParams(window.location.search).get('code')
+    // If session already exists (code was exchanged server-side via /auth/callback)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setReady(true)
+    })
+
+    // Handle PKCE code in URL (direct redirect to this page)
+    const code = params.get('code')
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
         if (!error) setReady(true)
@@ -33,15 +43,11 @@ export default function ResetPasswordPage() {
       })
     }
 
-    // If no code and no event after 3s, the link is invalid/expired
+    // After 3s with no valid session or recovery event, treat link as expired
     const timeout = setTimeout(() => {
-      setExpired((prev) => {
-        if (!prev) {
-          supabase.auth.getUser().then(({ data: { user } }) => {
-            if (!user) setExpired(true)
-          })
-        }
-        return prev
+      setReady(currentReady => {
+        if (!currentReady) setExpired(true)
+        return currentReady
       })
     }, 3000)
 
