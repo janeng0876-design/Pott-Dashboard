@@ -29,19 +29,13 @@ export default function ResetPasswordPage() {
       if (event === 'PASSWORD_RECOVERY') setReady(true)
     })
 
-    // If session already exists (code was exchanged server-side via /auth/callback)
+    // The Supabase client auto-exchanges the ?code via _initialize() and fires
+    // PASSWORD_RECOVERY. Calling exchangeCodeForSession manually would consume
+    // the single-use code a second time and cause a failure. Use getSession()
+    // as a fallback for cases where the session was set server-side (/auth/callback).
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true)
     })
-
-    // Handle PKCE code in URL (direct redirect to this page)
-    const code = params.get('code')
-    if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (!error) setReady(true)
-        else setExpired(true)
-      })
-    }
 
     // After 3s with no valid session or recovery event, treat link as expired
     const timeout = setTimeout(() => {
